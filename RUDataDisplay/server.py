@@ -9,7 +9,7 @@ from analysis.analysis_util import Analysis
 
 app = Flask(__name__)
 
-mongo = MongoDB(database="RUNewsData", host="localhost", port=27019, user="admin", password="Liyulin6749901!")
+mongo = MongoDB(database="RUNewsData", host="localhost", port=27019, user="", password="")
 mongo_pipline = MongoPipline(mongo)
 search_engine = SearchEngine(mongo_pipline)
 
