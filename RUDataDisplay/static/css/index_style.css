@@ -1,0 +1,55 @@
+.nvig_btn {
+    width:10rem;
+    height:42px;
+    border:2px solid #fff;
+    border-radius:10px;
+    background:#4f5bfb;
+    line-height:42px;
+    text-align:center;
+    color:#fff;
+    font-size:14px;
+    cursor:pointer
+}
+
+#nvigator {
+    background-color:beige;
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    height: 34px;
+    padding: 6px 12px;
+    font-size: 14px;
+    line-height: 1.42857143;
+    color: #555;
+    background-color: #fff;
+    background-image: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+    -webkit-transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+    -o-transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+    transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+}
+
+/* IE浏览器下隐藏下拉按钮 */
+select::-ms-expand { display: none; }
+
+/* 定义隐藏下拉框默认样式及图片覆盖下拉按钮 */
+/*.info-select{*/
+/*    width: 200px;*/
+/*    outline:none;*/
+/*    appearance:none;*/
+/*    -moz-appearance:none;*/
+/*    -webkit-appearance:none;*/
+/*    -ms-appearance:none;*/
+/*    background: url(img/down.png) no-repeat scroll right center transparent;*/
+/*}*/
+
+
+/*table td:hover{*/
+/*    white-space:normal;*/
+/*    overflow:auto;*/
+/*}*/

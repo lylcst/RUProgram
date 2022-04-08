@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NLPIR新闻搜索</title>
+    <style>
+        .news_select{
+        }
+        .date_find{
+            margin-left: auto;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .nvig_ouput {
+            margin-top: 10px;
+            text-align: center;
+        }
+        #list {
+            text-align: center;
+        }
+        #list table{
+            margin-left:auto;
+            margin-right:auto
+        }
+        th{
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        thead{
+            background-color: rgb(119, 119, 118);
+        }
+        table td{
+            /*max-width:400px;*/
+            /*max-height: 400px;*/
+            word-wrap: break-word;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+            overflow:hidden;
+            height: 30px;
+        }
+        table td.content{
+            max-width: calc(40vw);
+        }
+        table td.title{
+            max-width: calc(35vw);
+        }
+
+        #listnav{
+            text-align: center;
+        }
+
+    </style>
+    <link href="{{ url_for('static',filename='css/index_style.css') }}" rel="stylesheet"></link>
+<!--    <link rel="stylesheet" href="/css/all.css?v=199" media="screen" />-->
+    <script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://cdn.bootcss.com/echarts/3.7.1/echarts.min.js"></script>
+
+<!--    word生成-->
+    <script src="{{ url_for('static',filename='js/FileSaver.js') }}"></script>
+    <script src="{{ url_for('static',filename='js/PizZipUtils.js') }}"></script>
+    <script src="{{ url_for('static',filename='js/pizzip.min.js') }}"></script>
+    <script src="{{ url_for('static',filename='js/docxtemplater.js') }}"></script>
+    <script src="{{ url_for('static',filename='js/wordgen.js') }}"></script>
+
+</head>
+<br>
+    <div id="nvigator">
+        <div style="margin-top: auto">
+            <select class="news_select form-control" onchange='collectionKeyChange(this[selectedIndex].value);'>
+                <option selected="selected">路透社</option>
+                <option>半岛新闻</option>
+                <option>德国之声</option>
+                <option>朝鲜日报</option>
+                <option>合众国际社</option>
+                <option>美国之音</option>
+                <option>布鲁金斯学会</option>
+                <option>美国传统基金会</option>
+                <option>联合早报</option>
+            </select>
+        </div>
+
+
+        <div class="date_find">
+            起始时间:
+            <input id="from_time" type="datetime-local">
+            截至时间:
+            <input id="to_time" type="datetime-local">
+            关键字：
+            <input id="search_keyword" type="text" placeholder="可选项" >
+            <input type="button" value="查询" id="btn" class="nvig_btn">
+        </div>
+
+        <div class="nvig_ouput">
+            包含内容：
+            <input id="search_content" type="text" placeholder="可选项" >
+            <input type="button" value="下载数据" id="download_data" class="nvig_btn">
+            <input type="radio" value="json" id="json_file" name="file_type" checked="checked">
+            <label for="json_file">json</label>
+            <input type="radio" value="xlsx" id="xlsx_file" name="file_type">
+            <label for="xlsx_file">xlsx</label>
+            <input type="radio" value="word" id="word_file" name="file_type">
+            <label for="word_file">word</label>
+
+            &nbsp&nbsp&nbsp&nbsp
+            <input type="button" value="数据导出" id="output_data" class="nvig_btn">
+            <input type="button" value="数据分析" id="data_analysis" class="nvig_btn">
+        </div>
+
+
+    </div>
+
+    <div id="table_display_block">
+        <div style="display: inline">
+            <span>每页显示: </span>
+            <select id="page_display_num" onchange='PageDisplayChange(this[selectedIndex].value);'>
+                <option selected="selected">20</option>
+                <option>50</option>
+                <option>100</option>
+            </select>
+            <span>条</span>
+        </div>
+
+        <div id="list" style="margin-top:20px;">
+            <table class="table table-bordered table-striped">
+                <thead id="h_tb">
+                </thead>
+                <tbody id="j_tb">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="listnav" style="margin-top:20px;">
+        </div>
+    </div>
+
+</body>
+<script>
+    $('#btn').click(function(){
+        var page_size = parseInt($('#page_display_num option:selected').val());
+        getNewPage(0, page_size);
+    })
+
+    getNewPage = function (offset, page_size) {
+        var collection_key = $('.news_select option:selected').val();
+        var from_time = $('#from_time').val();
+        var to_time = $('#to_time').val();
+        var search_keyword = $('#search_keyword').val();
+        var search_content = $('#search_content').val();
+        var data = {
+            "collection_key": collection_key,
+            "from_time": from_time,
+            "to_time": to_time,
+            "search_keyword": search_keyword,
+            "search_content": search_content,
+            "offset": offset,
+            "page_size": page_size
+        }
+
+        $.ajax({
+            url: '/api',
+            type: 'GET',
+            data: data,
+            success: function(res){
+                if(res.success === 1){
+                    // 创建table
+                    createTable(res.data[collection_key]);
+                    // 创建table的多选框
+                    $("#j_cbAll").click(tableCheckList());
+                    // 创建翻页
+                    createNextPageTag(res.params.page_number, res.params.total_page, res.params.data_size);
+                }
+            },
+            error: function(){
+                console.log('有错误');
+            },
+            done: function () {
+                console.log('结束');
+            }
+        })
+    }
+
+    function createTable(data) {
+        var tableStr = "";
+        var len = data.length;
+        for( var i=0; i < len; i++) {
+            tableStr = tableStr + "<tr>"
+                    +"<td><input type='checkbox'></td>"
+                    +"<td class='title'>"
+                    +"<a href='" + data[i].url + "'>" + data[i].title + "</a>"
+                    +"</td>"
+                    +"<td class='time'>"+ data[i].time + "</td>"
+                    +"<td class='content'>"+ data[i].content + "</td>"
+                    +"<td class='keyword'>"+ data[i].keyword + "</td>"
+                    +"</tr>";
+        }
+        $("#h_tb").html(
+            `
+             <tr>
+                <th>
+                  <input type="checkbox" id="j_cbAll" />
+                </th>
+                <th>标题</th>
+                <th>时间</th>
+                <th>内容</th>
+                <th>关键字</th>
+              </tr>
+            `
+        )
+        $("#j_tb").html(tableStr);
+    }
+
+    $('#download_data').click(function(){
+        var collection_key = $('.news_select option:selected').val();
+        var from_time = $('#from_time').val();
+        var to_time = $('#to_time').val();
+        var checked_file_type = $('[name=file_type]:checked').val();
+        var search_keyword = $('#search_keyword').val();
+        var search_content = $('#search_content').val();
+        // console.log(checked_file_type)
+        if (checked_file_type === "word"){
+            alert("数据下载不支持word格式，请选择json或者xlsx格式")
+            return;
+        }
+        var data = {
+            "data": {
+                "collection_key": collection_key, 
+                "from_time": from_time,
+                "to_time": to_time, 
+                "search_keyword": search_keyword,
+                "search_content": search_content
+            },
+            "file_type": checked_file_type
+        }
+        exportFile(data, "/download");
+    })
+
+    exportFile = function(params, url) {
+        let xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json;charset=utf-8');
+        xhr.responseType = "blob";  // 返回类型blob
+        xhr.send(JSON.stringify(params));   // 发送ajax请求
+        xhr.onreadystatechange = function () {
+            // 监听属性xhr.readyState每次变化时会触发
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                // 响应已返回
+                var code = decodeURI(xhr.getResponseHeader("code"));
+                if (code.toString() === "0") {
+                    // 截取文件名，这里是后端返回了文件名+后缀，如果没有可以自己拼接
+                    // var fileName = decodeURI(xhr.getResponseHeader("content-disposition").split(";")[1].split("=")[1]);
+                    // var fileName = decodeURI(xhr.getResponseHeader("filename"));
+                    var fileName = params.data.collection_key + "." + params.file_type
+                    // 将`blob`对象转化成一个可访问的`url`
+                    let dataUrl = window.URL.createObjectURL(new Blob([xhr.response]));
+                    let link = document.createElement("a");
+                    link.style.display = "none";
+                    link.href = dataUrl;
+                    link.setAttribute("download", fileName);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } else {
+                    var msg = decodeURI(xhr.getResponseHeader("msg"));
+                }
+            }
+        }
+    }
+
+    $('#output_data').click(function(){
+        var checked_file_type = $('[name=file_type]:checked').val();
+        if(checked_file_type === "xlsx")
+            downloadCsv();
+        else if(checked_file_type === "json")
+            downloadJson();
+        else if(checked_file_type === "word")
+            downloadWord();
+    })
+
+    downloadJson = function () {
+        var collection_key = $('.news_select option:selected').val();
+        var tbody_data = document.getElementById("j_tb");
+        var data = { [collection_key]: []};
+        var flag = false;
+        for (var i = 0; i < tbody_data.getElementsByTagName("input").length; i++) {
+            if (tbody_data.getElementsByTagName("input")[i].checked) {
+                flag = true;
+                var title = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].innerHTML;
+                var time = tbody_data.getElementsByClassName("time")[i].innerHTML;
+                var url = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].getAttribute("href");
+                var content = tbody_data.getElementsByClassName("content")[i].innerHTML;
+                data[collection_key].push({"title": title, "time": time, "url": url, "content": content})
+            }
+        }
+        if(!flag){
+            alert("您未选取任何数据！请至少选择一条导出");
+            return;
+        }
+        //encodeURIComponent解决中文乱码
+        let uri = 'data:text/json;charset=utf-8,\ufeff' + JSON.stringify(data, null, 2);
+        //通过创建a标签实现
+        let link = document.createElement("a");
+        link.href = uri;
+        //对下载的文件命名
+        // var fileName = "test";
+        // link.download = `${fileName || '数据'}.json`;
+        link.download = `${collection_key}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    downloadCsv= function () {
+        var collection_key = $('.news_select option:selected').val();
+        var tbody_data = document.getElementById("j_tb");
+        let data = `title,time,url,content\n`;
+        var flag = false;
+        for(var i = 0; i < tbody_data.getElementsByTagName("input").length; i++){
+            if(tbody_data.getElementsByTagName("input")[i].checked){
+                flag = true;
+                var title = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].innerHTML;
+                var time = tbody_data.getElementsByClassName("time")[i].innerHTML;
+                var url = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].getAttribute("href");
+                var content = tbody_data.getElementsByClassName("content")[i].innerHTML;
+                data += `"${title.replace(/"/g, '""') + '\t'}",`
+                    + `${time + '\t'},` + `"${url + '\t'}",` + `"${content.replace(/"/g, '""') + '\t'}",`;
+                data += '\n';
+            }
+
+        }
+        if(!flag){
+            alert("您未选取任何数据！请至少选择一条导出");
+            return;
+        }
+        //encodeURIComponent解决中文乱码
+        let uri = 'data:text/csv;charset=utf-8,\ufeff' + encodeURIComponent(data);
+        //通过创建a标签实现
+        let link = document.createElement("a");
+        link.href = uri;
+        //对下载的文件命名
+        link.download = `${collection_key}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    downloadWord = function () {
+        var collection_key = $('.news_select option:selected').val();
+        var tbody_data = document.getElementById("j_tb");
+        var data = { [collection_key]: []};
+        var flag = false;
+        var index = 1;
+        for (var i = 0; i < tbody_data.getElementsByTagName("input").length; i++) {
+            if (tbody_data.getElementsByTagName("input")[i].checked) {
+                flag = true;
+                var title = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].innerHTML;
+                var time = tbody_data.getElementsByClassName("time")[i].innerHTML;
+                var url = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].getAttribute("href");
+                var content = tbody_data.getElementsByClassName("content")[i].innerHTML;
+                data[collection_key].push(
+                    {
+                        ["number_id_"+index.toString()]: index,
+                        ["collection_key_"+index.toString()]: collection_key,
+                        ["title_"+index.toString()]: title,
+                        ["time_"+index.toString()]: time,
+                        ["url_"+index.toString()]: url,
+                        ["content_"+index.toString()]: content
+                    }
+                )
+                index += 1;
+            }
+        }
+        if (index > 11){
+            alert("导出格式为word, 最多只能选择10条数据");
+            return;
+        }
+        if(!flag){
+            alert("您未选取任何数据！请至少选择一条导出");
+            return;
+        }
+        if(document.getElementById("trans_data") && document.getElementById("trans_data").checked)
+            lang = true
+        else
+            lang = false
+        generate(data[collection_key], lang, collection_key)
+    }
+
+    tableCheckList = function () {
+                // 表格复选框js
+        var j_cbAll = document.getElementById('j_cbAll'); // 全选按钮
+        var j_tbs = document.getElementById('j_tb').getElementsByTagName('input'); // 下面所有的复选框
+        // 全选事件
+        j_cbAll.onclick = function () {
+            // this.checked 它可以得到当前复选框的选中状态，如果是true就是选中，如果是false就是未选中
+            for(var i = 0; i < j_tbs.length; i++) {
+                j_tbs[i].checked = this.checked;
+            }
+        }
+        // 2.下面复选框需要全部选中，上面全选才能选中做法：给下面所以复选框绑定点击事件，每次点击，
+        // 都要循环查看下面所有的复选框是否有没选中的，上面全选就不选中。
+        for(var i = 0; i < j_tbs.length; i++) {
+            // 遍历为每个小按钮绑定事件
+            j_tbs[i].onclick = function () {
+                // flag 控制全选按钮是否选中
+                var flag = true;
+                // 每次点击下面的复选框都要循环检查这4个小按钮是否选中
+                for(var i = 0; i < j_tbs.length; i++) {
+                    if (!j_tbs[i].checked) {
+                        // j_cbAll.checked = false;
+                        flag = false;
+                        break; // 退出for循环，这样可以提高执行效率，因为只要有一个没有选中，剩下的就无需循环判断了
+                    }
+                }
+                j_cbAll.checked = flag;
+            }
+        }
+    }
+
+    // 翻页
+    createNextPageTag = function (page_number, total_page, data_size) {
+        $("#listnav").html(
+            `
+                <span>数据总量: ${data_size}</span>条
+                <input type="button" value="首页" id="first-page" onclick="fisrtPage()">
+                <input type="button" value="上一页" id="last-page" onclick="forwardPage()">
+                <span id="page_number">${page_number}</span>/
+                <span id="total_page">${total_page}</span>
+                <input type="button" value="下一页" id="next-page" onclick="nextPage()">
+                <input type="button" value="尾页" id="tail-page" onclick="tailPage()">
+                转到<input type="text" style="width: 30px" id="jump-page-number">页
+                <input type="button" value="GO" id="jump-page" onclick="jumpPage()">
+            `
+        )
+    }
+
+    nextPage = function () {
+        var offset = parseInt(document.getElementById("page_number").innerHTML);
+        var total_page = parseInt(document.getElementById("total_page").innerHTML);
+        var page_size = parseInt($('#page_display_num option:selected').val());
+        if (offset < total_page)
+            getNewPage(offset, page_size);
+    }
+    forwardPage = function () {
+        var offset = parseInt(document.getElementById("page_number").innerHTML);
+        var page_size = parseInt($('#page_display_num option:selected').val());
+        if (offset >= 2)
+            getNewPage(offset-2, page_size);
+    }
+    tailPage = function () {
+        var total_page = parseInt(document.getElementById("total_page").innerHTML);
+        var page_size = parseInt($('#page_display_num option:selected').val());
+        getNewPage(total_page-1, page_size);
+    }
+    fisrtPage = function () {
+        var page_size = parseInt($('#page_display_num option:selected').val());
+        getNewPage(0, page_size);
+    }
+    jumpPage = function () {
+        var page_num = parseInt(document.getElementById("jump-page-number").value);
+        var total_page = parseInt(document.getElementById("total_page").innerHTML);
+        var page_size = parseInt($('#page_display_num option:selected').val());
+        if (page_num <= total_page && page_num > 0 )
+            getNewPage(page_num-1, page_size);
+    }
+
+    PageDisplayChange = function (){
+        getNewPage(0, parseInt($('#page_display_num option:selected').val()));
+    }
+
+    collectionKeyChange = function (){
+        getNewPage(0, parseInt($('#page_display_num option:selected').val()));
+    }
+
+    getNewPage(0, parseInt($('#page_display_num option:selected').val()));
+
+    $("#data_analysis").click(function () {
+        var collection_key = $('.news_select option:selected').val();
+        var tbody_data = document.getElementById("j_tb");
+        var data = {[collection_key]: []};
+        var flag = false;
+        var num = 0;
+        for (var i = 0; i < tbody_data.getElementsByTagName("input").length; i++) {
+            if (tbody_data.getElementsByTagName("input")[i].checked) {
+                flag = true;
+                num += 1;
+                var title = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].innerHTML;
+                var time = tbody_data.getElementsByClassName("time")[i].innerHTML;
+                var url = tbody_data.getElementsByClassName("title")[i].getElementsByTagName("a")[0].getAttribute("href");
+                var content = tbody_data.getElementsByClassName("content")[i].innerHTML;
+                data[collection_key].push({"title": title, "time": time, "url": url, "content": content})
+            }
+        }
+        if(!flag) {
+            alert("您未选取任何数据！请至少选择一条导出");
+            return;
+        }
+        if(num > 20){
+            alert("最多选择20条数据！");
+            return;
+        }
+        $.ajax({
+            url: '/analysis',
+            type: 'POST',
+            timeout: 30000,
+            data: JSON.stringify(data),
+            success: function(res){
+                //新打开一个页面（about:blank是打开浏览器空白页的命令）, _blank：打开一个新的窗口
+                var newPage = window.open("about:blank", "_blank");
+                //将后台传过来的html页面写到新打开的浏览器窗口中显示
+                newPage.document.write(res);
+
+            },
+            error: function(){
+                console.log('有错误');
+            },
+            done: function () {
+                console.log('结束');
+            }
+        })
+
+    })
+
+
+</script>
+</html>
